@@ -1,4 +1,12 @@
+import asyncio
 import os
+
+try:
+    asyncio.get_running_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
+
+os.environ["STREAMLIT_WATCHER_IGNORE_ERRORS"] = "true"
 os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
 import json
 import sqlite3
@@ -16,6 +24,11 @@ RECORDINGS_DIR = os.path.join("backend", "recordings")
 # Create the folder if it doesn't exist
 os.makedirs(RECORDINGS_DIR, exist_ok=True)
 st.set_page_config(page_title="Font Identifier & Recorder", layout="wide")
+st.markdown(
+    "<style>header {visibility: hidden;} footer {visibility: hidden;}</style>",
+    unsafe_allow_html=True
+)
+st.session_state.setdefault("initialized", True)
 
 # Optional: if your utils provides a preprocess(image)->tensor
 try:
@@ -326,7 +339,7 @@ def set_query_params(**kwargs):
 
 def redirect_to_dashboard():
     st.session_state["page"] = "Dashboard"
-    st.rerun()
+    #st.rerun()
 
 def logout_button_sidebar():
     if st.sidebar.button("Logout"):
