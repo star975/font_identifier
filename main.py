@@ -1,13 +1,10 @@
+def main():
+    # Initialize session state for payment selection
+    if "selected_payment" not in st.session_state:
+        st.session_state.selected_payment = None
+
 import asyncio
 import os
-
-try:
-    asyncio.get_running_loop()
-except RuntimeError:
-    asyncio.set_event_loop(asyncio.new_event_loop())
-
-os.environ["STREAMLIT_WATCHER_IGNORE_ERRORS"] = "true"
-os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
 import json
 import sqlite3
 import hashlib
@@ -18,134 +15,225 @@ import streamlit as st
 from PIL import Image
 import streamlit.components.v1 as components
 from torchvision import models as tv_models
-# Path for recordings
-RECORDINGS_DIR = os.path.join("backend", "recordings")
-
-# Create the folder if it doesn't exist
-os.makedirs(RECORDINGS_DIR, exist_ok=True)
-st.set_page_config(page_title="Font Identifier & Recorder", layout="wide")
-st.markdown(
-    "<style>header {visibility: hidden;} footer {visibility: hidden;}</style>",
-    unsafe_allow_html=True
-)
-st.session_state.setdefault("initialized", True)
-
-# Optional: if your utils provides a preprocess(image)->tensor
-try:
-    import utils
-    HAS_UTILS = True
-except Exception:
-    HAS_UTILS = False
-
-# Torch is required for model inference
 import torch
 import torch.nn as nn
 
-# -----------------------------
-# Streamlit App Config & Theme
-# -----------------------------
+st.set_page_config(page_title="Font Identifier & Recorder", layout="wide")
+
+try: 
+    import utils 
+    HAS_UTILS = True 
+except Exception:
+    HAS_UTILS = False
+# ====================================================
+#               EVENT LOOP SAFETY (ASYNCIO)
+# ====================================================
+try:
+    asyncio.get_running_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
+
+# ====================================================
+#                 ENVIRONMENT FIXES
+# ====================================================
+os.environ["STREAMLIT_WATCHER_IGNORE_ERRORS"] = "true"
+os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
 os.environ["STREAMLIT_WATCHER_IGNORE_MODULES"] = "torch"
 os.environ["STREAMLIT_WATCH_SYSTEM_PYTHON"] = "false"
 
-# Mitigate MKLDNN issues on some Windows CPUs
+# Path for recordings
+RECORDINGS_DIR = os.path.join("backend", "recordings")
+os.makedirs(RECORDINGS_DIR, exist_ok=True)
+
+# ====================================================
+#               TORCH CPU FIXES
+# ====================================================
 try:
     import torch.backends.mkldnn as mkldnn
     mkldnn.enabled = False
 except Exception:
     pass
 
-# -----------------------------
-# Constants / Paths
-# -----------------------------
+# ====================================================
+#                 CONSTANTS / PATHS
+# ====================================================
 APP_BRAND = "🖋️ Font Identifier"
 DB_PATH = "app_users.db"
-MODEL_PATH = "model.pth"  # place next to app.py or adjust
+MODEL_PATH = "model.pth"
 LABELS_PATH = os.path.join("data", "fontlist.txt")
 
 # -----------------------------
-# Global Styles
-# -----------------------------
+# === GLOBAL APP DESIGN (Dark + Mixed Colors + Glassmorphism) ===
 st.markdown("""
 <style>
+/* ===== Root Colors ===== */
 :root {
-  --bg: #0b1220;
-  --card: #121a2a;
-  --text: #e7ecf3;
-  --muted: #b1bdd1;
-  --accent: #7c5cff;
-  --accent-2: #22d3ee;
+  --bg: #0a0f1e;
+  --card: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.15);
+  --text: #f8fafc;
+  --muted: #94a3b8;
+  --accent: #6366f1;
+  --accent-2: #06b6d4;
+  --accent-3: #ec4899;
+  --shadow: 0 8px 25px rgba(0,0,0,.35);
+  --blur: 18px;
+  --radius: 18px;
 }
-html, body, [class*="css"]  {
+
+/* ===== Background ===== */
+html, body, [class*="css"] {
+  background: radial-gradient(circle at top left, #1e293b, #0a0f1e);
   color: var(--text);
-  background-color: var(--bg);
+  font-family: 'Segoe UI', sans-serif;
 }
-section.main > div { padding-top: 1rem; }
-.block-container { padding-top: 1.25rem; }
+
+/* ===== Headings ===== */
+h1, h2, h3 {
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+h1 {
+  font-size: 42px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2), var(--accent-3));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+h2 {
+  font-size: 28px;
+  color: var(--accent-2);
+}
+p {
+  font-size: 16px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+/* ===== Buttons ===== */
 .stButton>button {
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   color: white;
-  border: 0;
-  padding: .6rem 1rem;
-  border-radius: 12px;
+  border: none;
+  padding: .75rem 1.25rem;
+  border-radius: var(--radius);
+  font-weight: 600;
+  box-shadow: var(--shadow);
+  transition: all .25s ease;
 }
+.stButton>button:hover {
+  transform: translateY(-2px) scale(1.02);
+  background: linear-gradient(135deg, var(--accent-3), var(--accent-2));
+}
+
+/* ===== Glass Cards ===== */
 .card {
   background: var(--card);
+  border-radius: var(--radius);
   padding: 22px;
-  border-radius: 18px;
-  border: 1px solid rgba(255,255,255,.08);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  box-shadow: var(--shadow);
+  margin-bottom: 20px;
 }
 .kpi {
-  background: var(--card);
-  padding: 16px;
-  border-radius: 16px;
-  border: 1px solid rgba(255,255,255,.06);
+  text-align: center;
 }
-.small { color: var(--muted); font-size: 0.9rem; }
-.hr { height: 1px; background: rgba(255,255,255,.08); margin: 1rem 0; }
 
-/* Top navbar (welcome page) */
-.navbar-top {
+/* ===== Navbar ===== */
+.navbar {
   width: 100%;
-  display: flex; justify-content: center; gap: 16px;
-  margin: 0 auto; padding: 14px 12px;
-  position: sticky; top: 0;
-  background: rgba(10,15,25,0.75);
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  z-index: 9999; backdrop-filter: blur(8px);
-  border-radius: 0 0 16px 16px;
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  padding: 14px 12px;
+  margin-bottom: 28px;
+  position: sticky;
+  top: 0;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border-bottom: 1px solid var(--border);
+  border-radius: 0 0 var(--radius) var(--radius);
+  z-index: 9999;
 }
 .navlink {
-  color: var(--text); text-decoration: none; font-weight: 600;
-  padding: 8px 14px; border-radius: 12px; transition: all .2s ease;
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 12px;
+  transition: all .25s ease;
 }
 .navlink:hover {
-  background: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.12);
 }
+
+/* ===== Hero Section ===== */
 .hero {
-  background: radial-gradient(1200px 600px at 10% -10%, rgba(124,92,255,.25) 0%, rgba(0,0,0,0) 50%),
-              radial-gradient(1200px 600px at 110% 10%, rgba(34,211,238,.25) 0%, rgba(0,0,0,0) 55%),
-              linear-gradient(120deg, #111624 0%, #0b1220 100%);
-  padding: 72px 22px; border-radius: 22px; text-align: center;
-  border: 1px solid rgba(255,255,255,0.06);
+  background: linear-gradient(135deg, rgba(99,102,241,.25), rgba(6,182,212,.25), rgba(236,72,153,.2));
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  padding: 80px 28px;
+  border-radius: 22px;
+  text-align: center;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
 }
-.hero h1 { font-size: 46px; margin-bottom: 10px; }
-.hero p { font-size: 18px; color: var(--muted); }
-.hero-cta { margin-top: 24px; display: flex; gap: 12px; justify-content: center; }
+.hero h1 {
+  font-size: 50px;
+  margin-bottom: 12px;
+}
+.hero p {
+  font-size: 18px;
+  color: var(--muted);
+}
+.hero-cta {
+  margin-top: 28px;
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+}
 .hero-cta a {
-  text-decoration: none; color: white; font-weight: 600;
-  padding: 10px 16px; border-radius: 14px;
+  text-decoration: none;
+  color: white;
+  font-weight: 600;
+  padding: 12px 20px;
+  border-radius: 14px;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: var(--shadow);
+  transition: all .25s ease;
 }
 .hero-cta a.secondary {
-  background: transparent; color: var(--text);
-  border: 1px solid rgba(255,255,255,0.12);
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
 }
+.hero-cta a:hover {
+  transform: scale(1.05);
+}
+
+/* ===== Feature Boxes ===== */
 .feature {
-  background: var(--card); border-radius: 16px; padding: 16px;
-  border: 1px solid rgba(255,255,255,.06);
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: center;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.feature h3 {
+  margin-top: 10px;
+  font-size: 20px;
+}
+.feature p {
+  font-size: 15px;
+  color: var(--muted);
 }
 </style>
 """, unsafe_allow_html=True)
+
+
 
 # ====================================================
 #                 PERSISTENT AUTH (SQLite)
@@ -382,6 +470,53 @@ def page_welcome():
         """,
         unsafe_allow_html=True
     )
+
+    def page_home():
+    # Navbar
+     st.markdown("""
+    <div class="navbar">
+        <a class="navlink" href="#">🏠 Home</a>
+        <a class="navlink" href="#">📊 Dashboard</a>
+        <a class="navlink" href="#">🧠 Predictions</a>
+        <a class="navlink" href="#">📄 Reports</a>
+        <a class="navlink" href="#">⚙️ Settings</a>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Hero Section
+    st.markdown("""
+    <div class="hero">
+        <h1>Welcome to Your AI Health App</h1>
+        <p>Smart predictions, clear insights, and modern health analytics — all in one place.</p>
+        <div class="hero-cta">
+            <a href="#">🚀 Start Now</a>
+            <a href="#" class="secondary">📘 Learn More</a>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.write("")  # Spacer
+
+    # KPI Cards
+    cols = st.columns(3)
+    with cols[0]:
+        st.markdown('<div class="card kpi"><h2>50+</h2><p class="small">Predictions</p></div>', unsafe_allow_html=True)
+    with cols[1]:
+        st.markdown('<div class="card kpi"><h2>98%</h2><p class="small">Accuracy</p></div>', unsafe_allow_html=True)
+    with cols[2]:
+        st.markdown('<div class="card kpi"><h2>200+</h2><p class="small">Users</p></div>', unsafe_allow_html=True)
+
+    st.write("")  # Spacer
+
+    # Features
+    cols = st.columns(3)
+    with cols[0]:
+        st.markdown('<div class="feature">📊<h3>Analytics</h3><p>Track real-time health insights</p></div>', unsafe_allow_html=True)
+    with cols[1]:
+        st.markdown('<div class="feature">🧠<h3>AI Predictions</h3><p>Early detection of diseases</p></div>', unsafe_allow_html=True)
+    with cols[2]:
+        st.markdown('<div class="feature">📄<h3>Reports</h3><p>Download and share PDF reports</p></div>', unsafe_allow_html=True)
+
     st.write("")
     col1, col2, col3, col4 = st.columns(4, gap="large")
     with col1:
@@ -454,7 +589,7 @@ def page_login():
             st.success(f"Welcome back, {username}!")
             st.success("Login successful! Redirecting to your dashboard…")
             redirect_to_dashboard()
-            st.rerun()
+            #st.rerun()
         else:
             st.error("Invalid username or password.")
 
@@ -488,7 +623,7 @@ def page_dashboard(model: torch.nn.Module, class_names: list):
 def page_subscriptions():
     if not st.session_state.get("logged_in"):
         st.warning("Please log in to subscribe.")
-        pass
+        return
 
     st.header("💳 Subscription Plans")
     plans = {
@@ -498,13 +633,12 @@ def page_subscriptions():
     }
 
     for plan, desc in plans.items():
-        with st.container():
-            st.subheader(plan)
+        with st.expander(plan, expanded=(plan == "Basic")):
             st.write(desc)
             if st.button(f"Choose {plan} Plan", key=plan):
                 st.session_state["plan"] = plan
-                st.success(f"You selected {plan} plan!")
-                st.info("Redirecting to payment...")
+                #st.success(f"You selected {plan} plan!")
+                #st.info("Redirecting to payment...")
                 st.session_state["pending_plan"] = plan
                 st.session_state["page"] = "Payment"
                 st.rerun()
@@ -513,18 +647,59 @@ def page_payment():
     if not st.session_state.get("logged_in"):
         st.warning("Please log in first.")
         return
-
+        
     plan = st.session_state.get("pending_plan", "Free")
     st.header(f"💳 Payment for {plan} Plan")
+    
+    # Payment method selection with logos
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.image("https://upload.wikimedia.org/wikipedia/commons/0/04/Mastercard-logo.svg", width=80)
+        if st.button("MasterCard", key="mc"):
+            st.session_state["selected_payment_method"] = "MasterCard"
+            st.rerun()
 
-    method = st.radio("Select Payment Method", ["MasterCard", "PayPal", "MTN Mobile Money", "Airtel Money"])
-    if st.button("Pay Now"):
-        st.success(f"✅ Payment for {plan} via {method} successful (mock).")
-        update_plan(st.session_state["username"], plan)
-        st.session_state["plan"] = plan
-        st.session_state.pop("pending_plan", None)
-        st.session_state["page"] = "Dashboard"
-        st.rerun()
+    with col2:
+        st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/0/0f/Airtel_Money_Logo.svg/2560px-Airtel_Money_Logo.svg.png", width=80)
+        if st.button("Airtel Money", key="am"):
+            st.session_state["selected_payment_method"] = "Airtel Money"
+            st.rerun()
+    with col3:
+        st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/f/f9/MTN_Logo.svg/2560px-MTN_Logo.svg.png", width=80)
+        if st.button("MTN Mobile Money", key="mom"):
+            st.session_state["selected_payment_method"] = "MTN Mobile Money"
+            st.rerun()
+
+    with col4:
+        st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/PayPal_logo_PNG.png/512px-PayPal_logo_PNG.png", width=80)
+        if st.button("PayPal", key="pp"):
+            st.session_state["selected_payment_method"] = "PayPal"
+            st.rerun()
+
+      # Check if payment method is selected
+    if "selected_payment_method" in st.session_state:
+        st.success(f"✅ Selected: {st.session_state['selected_payment_method']}")
+        
+        # Show payment details form
+        st.subheader("Payment Details")
+        card_number = st.text_input("Card Number", type="password")
+        exp_date = st.text_input("Expiration Date (MM/YY)")
+        cvv = st.text_input("CVV", max_length=3, type="password")
+        
+        if st.button("Complete Payment"):
+            if card_number and exp_date and cvv:
+                st.success(f"✅ Payment processed via {st.session_state['selected_payment']}!")
+                update_plan(st.session_state["username"], plan)
+                st.session_state["plan"] = plan
+                st.session_state.pop("pending_plan", None)
+                st.session_state.pop("selected_payment", None)
+                st.session_state["page"] = "Dashboard"
+                st.rerun()
+            else:
+                  st.error("❌ Please fill in all payment details.")
+    else:
+        st.info("👆 Please select a payment method above")
 
 def page_screen_record():
     st.title("📹 Screen Recording with Narration")
@@ -622,7 +797,7 @@ def page_screen_record():
 def sidebar_nav_logged_in():
     st.sidebar.title(APP_BRAND)
     st.sidebar.success(f"Hello, {st.session_state['username']}!")
-    pages = ["Dashboard", "Screen Record", "Saved Recordings", "About"]
+    pages = ["Dashboard", "Screen Record", "Saved Recordings", "Subscriptions", "About"]
     default_idx = pages.index(st.session_state.get("page", "Dashboard")) if st.session_state.get("page", "Dashboard") in pages else 0
     choice = st.sidebar.radio("Navigate", pages, index=default_idx)
     st.session_state["page"] = choice
