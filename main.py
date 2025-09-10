@@ -72,6 +72,26 @@ DB_PATH = "app_users.db"
 MODEL_PATH = "model.pth"
 LABELS_PATH = os.path.join("data", "fontlist.txt")
 
+# ====================================================
+#           PRODUCTION CONFIGURATION (Streamlit Cloud)
+# ====================================================
+# Production configuration for Streamlit Cloud deployment
+if hasattr(st, 'secrets') and st.secrets.get("ENVIRONMENT") == "production":
+    # Use cloud database if specified
+    DB_PATH = st.secrets.get("DATABASE_URL", "app_users.db")
+    
+    # Set production secret key
+    if st.secrets.get("SECRET_KEY"):
+        os.environ["SECRET_KEY"] = st.secrets.get("SECRET_KEY")
+    
+    # Disable file watcher in production for performance
+    os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
+    
+    # Production optimizations
+    os.environ["STREAMLIT_SERVER_HEADLESS"] = "true"
+    os.environ["STREAMLIT_SERVER_ENABLE_CORS"] = "false"
+    os.environ["PYTHONUNBUFFERED"] = "1"
+
 # -----------------------------
 # === PWA AND MOBILE SETUP ===
 
@@ -532,16 +552,49 @@ def load_model_and_classes() -> Tuple[torch.nn.Module, list]:
     - Works if 'model.pth' is a full pickled model
     - Or if it's a state_dict (with or without 'state_dict' key)
     - Avoids PyTorch 2.6 weights_only=True default by explicitly using weights_only=False
+    - Supports cloud deployment with fallback model loading
     """
     classes = read_class_names()
 
-    # Resolve model path
-    model_path = r"C:\Users\pc\Desktop\AI\model.pth"
-    if not os.path.isabs(model_path):
-        model_path = os.path.join(os.path.dirname(__file__), model_path)
+    # Try multiple model path locations for cross-platform compatibility
+    possible_paths = [
+        MODEL_PATH,  # Current directory
+        os.path.join(os.path.dirname(__file__), MODEL_PATH),  # Script directory
+        r"C:\Users\pc\Desktop\AI\model.pth",  # Original development path (fallback)
+    ]
+    
+    # Check for cloud model URL if in production
+    model_url = None
+    if hasattr(st, 'secrets') and st.secrets.get("MODEL_URL"):
+        model_url = st.secrets.get("MODEL_URL")
+    
+    model_path = None
+    
+    # First try local paths
+    for path in possible_paths:
+        if os.path.exists(path):
+            model_path = path
+            break
+    
+    # If no local model found and we have a cloud URL, try downloading
+    if not model_path and model_url:
+        try:
+            import requests
+            st.info("🌐 Downloading model from cloud storage...")
+            response = requests.get(model_url, stream=True)
+            if response.status_code == 200:
+                model_path = "downloaded_model.pth"
+                with open(model_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                st.success("✅ Model downloaded successfully!")
+            else:
+                st.warning(f"Failed to download model: HTTP {response.status_code}")
+        except Exception as e:
+            st.warning(f"Failed to download model: {e}")
 
-    if not os.path.exists(model_path):
-        st.error(f"Model file not found at: {model_path}")
+    if not model_path:
+        st.warning("⚠️ Model file not found. Using dummy model for demonstration.")
         # Create trivial dummy classifier to avoid crashing
         class Dummy(nn.Module):
             def __init__(self, n): super().__init__(); self.fc = nn.Linear(1, n)
