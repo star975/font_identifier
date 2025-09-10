@@ -122,7 +122,7 @@ RECORDINGS_DIR=recordings
 ```
 
 ### Custom Model
-Replace `model.pth` with your own trained font classification model. The model should be compatible with PyTorch and output predictions for the classes listed in `data/fontlist.txt`.
+ The model should be compatible with PyTorch and output predictions for the classes listed in `data/fontlist.txt`.
 
 ## 🎯 Usage
 
@@ -195,7 +195,7 @@ docker-compose -f docker-compose.prod.yml up -d
 
 ## 📄 License
 
-This project is licensed under the MIT License. See `LICENSE` file for details.
+This project is licensed under the NSR License. See `LICENSE` file for details.
 
 ## 🤝 Contributing
 
@@ -208,7 +208,7 @@ This project is licensed under the MIT License. See `LICENSE` file for details.
 ## 🆘 Support
 
 - **Issues**: Report bugs and request features on GitHub Issues
-- **Email**: Contact support at [your-email@domain.com]
+- **Email**: Contact support at -emailkirundastanley@nehemiahstemresearch.com
 - **Documentation**: Check the [Wiki](link-to-wiki) for detailed guides
 
 ## 🎉 Changelog
@@ -222,4 +222,4 @@ This project is licensed under the MIT License. See `LICENSE` file for details.
 
 ---
 
-**Made with ❤️ by [Your Name]**
+**Made with ❤️ by Mr Stanley**
