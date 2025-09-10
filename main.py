@@ -18,7 +18,17 @@ from torchvision import models as tv_models
 import torch
 import torch.nn as nn
 
-st.set_page_config(page_title="Font Identifier & Recorder", layout="wide")
+st.set_page_config(
+    page_title="Font Identifier & Recorder", 
+    layout="wide",
+    page_icon="🖋️",
+    initial_sidebar_state="auto",
+    menu_items={
+        'Get Help': 'https://github.com/your-repo/issues',
+        'Report a bug': 'https://github.com/your-repo/issues',
+        'About': "# Font Identifier\nAI-powered font identification with screen recording capabilities."
+    }
+)
 
 try: 
     import utils 
@@ -63,7 +73,36 @@ MODEL_PATH = "model.pth"
 LABELS_PATH = os.path.join("data", "fontlist.txt")
 
 # -----------------------------
-# === GLOBAL APP DESIGN (Dark + Mixed Colors + Glassmorphism) ===
+# === PWA AND MOBILE SETUP ===
+
+# PWA Meta tags and manifest
+st.markdown("""
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="theme-color" content="#6366f1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FontID">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="apple-touch-icon" href="/static/icons/icon-192x192.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/static/icons/icon-16x16.png">
+<script>
+  // Register service worker for PWA functionality
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/static/sw.js')
+        .then((registration) => {
+          console.log('SW registered: ', registration);
+        })
+        .catch((registrationError) => {
+          console.log('SW registration failed: ', registrationError);
+        });
+    });
+  }
+</script>
+""", unsafe_allow_html=True)
+
+# === GLOBAL APP DESIGN (Dark + Mixed Colors + Glassmorphism + Mobile Responsive) ===
 st.markdown("""
 <style>
 /* ===== Root Colors ===== */
@@ -229,6 +268,162 @@ p {
 .feature p {
   font-size: 15px;
   color: var(--muted);
+}
+
+/* ===== Mobile Responsive Design ===== */
+@media (max-width: 768px) {
+  /* Mobile layout adjustments */
+  .hero {
+    padding: 40px 16px;
+    text-align: center;
+  }
+  .hero h1 {
+    font-size: 32px;
+  }
+  .hero p {
+    font-size: 16px;
+  }
+  .hero-cta {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .hero-cta a {
+    width: 100%;
+    text-align: center;
+  }
+  
+  /* Navigation adjustments */
+  .navbar {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 8px;
+  }
+  .navlink {
+    font-size: 14px;
+    padding: 6px 12px;
+  }
+  
+  /* Cards and features */
+  .card {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .feature {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  
+  /* Buttons */
+  .stButton>button {
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 16px;
+    margin-bottom: 8px;
+  }
+  
+  /* Form elements */
+  .stTextInput>div>div>input,
+  .stTextArea>div>div>textarea,
+  .stSelectbox>div>div>select {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+  
+  /* File uploader */
+  .stFileUploader {
+    margin-bottom: 16px;
+  }
+  
+  /* Columns stack on mobile */
+  .row-widget.stColumns {
+    flex-direction: column;
+  }
+  .element-container .column {
+    width: 100% !important;
+    margin-bottom: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Extra small screens */
+  .hero h1 {
+    font-size: 28px;
+  }
+  .card, .feature {
+    padding: 12px;
+  }
+  .navbar {
+    padding: 8px 4px;
+  }
+  .navlink {
+    font-size: 12px;
+    padding: 4px 8px;
+  }
+}
+
+/* ===== Touch-friendly elements ===== */
+@media (pointer: coarse) {
+  .stButton>button {
+    min-height: 44px; /* Minimum touch target size */
+    padding: 12px 20px;
+  }
+  
+  .navlink {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  /* Larger tap targets */
+  input, button, select, textarea {
+    min-height: 44px;
+  }
+}
+
+/* ===== Dark mode media query support ===== */
+@media (prefers-color-scheme: dark) {
+  /* Already dark by default, but can add overrides here */
+}
+
+/* ===== Reduced motion support ===== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ===== High contrast support ===== */
+@media (prefers-contrast: high) {
+  :root {
+    --border: rgba(255, 255, 255, 0.3);
+    --text: #ffffff;
+    --muted: #cccccc;
+  }
+}
+
+/* ===== PWA specific styles ===== */
+@media (display-mode: standalone) {
+  /* When running as PWA */
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  .navbar {
+    top: env(safe-area-inset-top);
+  }
+}
+
+/* ===== Orientation support ===== */
+@media (orientation: landscape) and (max-height: 500px) {
+  .hero {
+    padding: 20px 16px;
+  }
+  .hero h1 {
+    font-size: 24px;
+  }
 }
 </style>
 """, unsafe_allow_html=True)
