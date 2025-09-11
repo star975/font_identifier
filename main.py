@@ -535,8 +535,8 @@ def load_model_and_classes() -> Tuple[torch.nn.Module, list]:
     """
     classes = read_class_names()
 
-    # Resolve model path
-    model_path = r"C:\Users\pc\Desktop\AI\model.pth"
+    # Resolve model path - works both locally and in Docker
+    model_path = MODEL_PATH
     if not os.path.isabs(model_path):
         model_path = os.path.join(os.path.dirname(__file__), model_path)
 
