@@ -20,6 +20,11 @@ ENV STREAMLIT_SERVER_HEADLESS=true
 ENV STREAMLIT_SERVER_ENABLE_CORS=false
 ENV STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=false
 
+# PyTorch optimization for better model loading
+ENV TORCH_HOME=/app/torch_cache
+ENV PYTORCH_ENABLE_MPS_FALLBACK=1
+ENV OMP_NUM_THREADS=1
+
 # Copy requirements first to leverage Docker caching
 COPY requirements.txt .
 COPY requirements-docker.txt .
@@ -34,7 +39,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY . .
 
 # Create necessary directories
-RUN mkdir -p recordings config static backend/recordings
+RUN mkdir -p recordings config static backend/recordings torch_cache
 
 # Create a non-root user
 RUN useradd --create-home --shell /bin/bash appuser && \
