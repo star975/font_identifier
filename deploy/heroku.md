@@ -51,9 +51,9 @@ psycopg2-binary==2.9.7
   "name": "Font Identifier",
   "description": "AI-powered font identification with screen recording",
   "keywords": ["streamlit", "ai", "font-identification", "machine-learning"],
-  "website": "https://github.com/yourusername/font-identifier",
-  "repository": "https://github.com/yourusername/font-identifier",
-  "logo": "https://your-domain.com/logo.png",
+  "website": "https://github.com/nehemiahsterm/font-identifier",
+  "repository": "https://github.com/star975/font-identifier",
+  "logo": "https://your-nehemiahsterm.com/logo.png",
   "success_url": "/",
   "env": {
     "SECRET_KEY": {

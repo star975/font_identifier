@@ -22,9 +22,12 @@ ENV STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=false
 
 # Copy requirements first to leverage Docker caching
 COPY requirements.txt .
+COPY requirements-docker.txt .
 
-# Install Python dependencies
+# Install Python dependencies with better error handling
 RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir wheel setuptools && \
+    pip install --no-cache-dir -r requirements-docker.txt || \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy application code

@@ -1,0 +1,35 @@
+# Heroku-optimized requirements (CPU-only PyTorch)
+
+# Core Web Framework
+streamlit>=1.28.0,<2.0.0
+
+# PyTorch CPU-only (smaller, faster for Heroku)
+torch>=2.0.0,<3.0.0 --index-url https://download.pytorch.org/whl/cpu
+torchvision>=0.15.0,<1.0.0 --index-url https://download.pytorch.org/whl/cpu
+
+# Image Processing (headless for Heroku)
+Pillow>=9.0.0,<11.0.0
+opencv-python-headless>=4.5.0,<5.0.0
+
+# Data Science
+numpy>=1.21.0,<2.0.0
+pandas>=1.3.0,<3.0.0
+scikit-learn>=1.0.0,<2.0.0
+matplotlib>=3.5.0,<4.0.0
+
+# Media Processing
+moviepy>=1.0.0,<2.0.0
+imageio[ffmpeg]>=2.9.0,<3.0.0
+
+# HTTP Requests
+requests>=2.25.0,<3.0.0
+
+# Payment Integrations
+paypalrestsdk>=1.13.0,<2.0.0
+stripe>=5.0.0,<11.0.0
+
+# Database for Heroku
+psycopg2-binary>=2.8.0,<3.0.0
+
+# WSGI Server for production
+gunicorn>=20.0.0,<22.0.0

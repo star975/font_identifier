@@ -145,8 +145,15 @@ Once deployed, users can install your app on their phones:
 
 ### App won't start locally?
 ```bash
-# Install dependencies first
+# Fix dependency conflicts first
+python test_dependencies.py
+
+# Install dependencies with fixed versions
+pip install --upgrade pip
 pip install -r requirements.txt
+
+# If still having issues, try:
+pip install -r requirements-tested.txt
 
 # Then run
 python -m streamlit run main.py

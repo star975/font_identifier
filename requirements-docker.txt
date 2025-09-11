@@ -1,11 +1,13 @@
+# Docker-optimized requirements
+
 # Core Web Framework
 streamlit>=1.28.0,<2.0.0
 
-# PyTorch - Compatible versions (let pip resolve)
+# PyTorch - Let Docker handle the version resolution
 torch>=2.0.0,<3.0.0
 torchvision>=0.15.0,<1.0.0
 
-# Image Processing
+# Image Processing (headless for containers)
 Pillow>=9.0.0,<11.0.0
 opencv-python-headless>=4.5.0,<5.0.0
 
@@ -19,16 +21,15 @@ matplotlib>=3.5.0,<4.0.0
 moviepy>=1.0.0,<2.0.0
 imageio[ffmpeg]>=2.9.0,<3.0.0
 
-# System Interaction
-pyautogui>=0.9.50,<1.0.0
-
 # HTTP Requests
 requests>=2.25.0,<3.0.0
 
-# Payment Integrations (Optional)
+# Payment Integrations
 paypalrestsdk>=1.13.0,<2.0.0
 stripe>=5.0.0,<11.0.0
 
-# Database (for production deployments)
-psycopg2-binary>=2.8.0,<3.0.0; platform_system != "Windows"
-psycopg2>=2.8.0,<3.0.0; platform_system == "Windows"
+# Database
+psycopg2-binary>=2.8.0,<3.0.0
+
+# Redis for caching
+redis>=4.0.0,<5.0.0
