@@ -4,15 +4,22 @@ FROM python:3.9-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# Install system dependencies with non-interactive configuration
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     wget \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
-# Set environment variables
+# Set environment variables for non-interactive installation
+ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBCONF_NONINTERACTIVE_SEEN=true
+ENV TERM=xterm
+
+# Python and Streamlit environment variables
 ENV PYTHONUNBUFFERED=1
 ENV STREAMLIT_SERVER_PORT=8501
 ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
@@ -66,9 +73,9 @@ USER appuser
 # Expose port
 EXPOSE 8501
 
-# Health check (install curl for health checks)
+# Health check (curl already installed above)
 USER root
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/* && apt-get clean
+# Curl already installed in system dependencies step
 USER appuser
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
