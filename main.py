@@ -1,8 +1,3 @@
-def main():
-    # Initialize session state for payment selection
-    if "selected_payment" not in st.session_state:
-        st.session_state.selected_payment = None
-
 import asyncio
 import os
 import json
@@ -1096,7 +1091,7 @@ def page_saved_recordings():
             if f.endswith((".mp4", ".avi", ".mov")):
                 st.video(file_path)
             elif f.endswith((".png", ".jpg")):
-                st.image(file_path, use_column_width=True)
+                st.image(file_path, use_container_width=True)
 
             col1, col2 = st.columns([1, 1])
 
@@ -1114,51 +1109,64 @@ def page_saved_recordings():
                 if st.button(f"🗑️ Delete {f}", key=f"del_{f}"):
                     os.remove(file_path)
                     st.success(f"Deleted {f}")
-                    st.experimental_rerun()  # Refresh page to update file list
+                    st.rerun()  # Refresh page to update file list
 
 # ====================================================
 #                 MAIN ROUTER
 # ====================================================
 
 def main():
-    # Ensure DB exists
-    init_db()
+    try:
+        # Initialize session state for payment selection
+        if "selected_payment" not in st.session_state:
+            st.session_state.selected_payment = None
+            
+        # Ensure DB exists
+        init_db()
 
-    # Load model & class names once
-    global model, class_names
-    model, class_names = load_model_and_classes()
-    # If user is logged in → sidebar navigation
-    if st.session_state.get("logged_in"):
-        choice = sidebar_nav_logged_in()
-        if choice == "Dashboard":
-            page_dashboard(model, class_names)
-        elif choice == "Screen Record":
-            page_screen_record()
-        elif choice == "Saved Recordings":
-            page_saved_recordings()
-        elif choice == "Subscriptions":
-            page_subscriptions()
-        elif choice == "Payment":
-            page_payment()
-        elif choice == "About":
+        # Load model & class names once
+        global model, class_names
+        model, class_names = load_model_and_classes()
+        
+        # If user is logged in → sidebar navigation
+        if st.session_state.get("logged_in"):
+            choice = sidebar_nav_logged_in()
+            if choice == "Dashboard":
+                page_dashboard(model, class_names)
+            elif choice == "Screen Record":
+                page_screen_record()
+            elif choice == "Saved Recordings":
+                page_saved_recordings()
+            elif choice == "Subscriptions":
+                page_subscriptions()
+            elif choice == "Payment":
+                page_payment()
+            elif choice == "About":
+                page_about()
+            return
+
+        # If not logged in → top navigation with query params
+        nav = get_query_param("nav", "welcome")
+
+        if nav == "login":
+            page_login()
+        elif nav == "signup":
+            page_signup()
+        elif nav == "about":
             page_about()
-        return   # ✅ now valid, inside main()
-
-    # If not logged in → top navigation with query params
-    nav = get_query_param("nav", "welcome")
-
-    if nav == "login":
-        page_login()
-    elif nav == "signup":
-        page_signup()
-    elif nav == "about":
-        page_about()
-    elif nav == "subscriptions":
-        page_subscriptions()
-    elif nav == "payment":
-        page_payment()
-    else:
-        page_welcome()
+        elif nav == "subscriptions":
+            page_subscriptions()
+        elif nav == "payment":
+            page_payment()
+        else:
+            page_welcome()
+            
+    except Exception as e:
+        st.error("An error occurred while loading the application.")
+        st.error(f"Error details: {str(e)}")
+        # Provide a basic interface even if there's an error
+        st.title("Font Identifier")
+        st.info("The application encountered an issue. Please refresh the page or contact support.")
 
 # ====================================================
 #                 ENTRY POINT

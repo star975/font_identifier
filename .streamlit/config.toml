@@ -1,5 +1,4 @@
 [global]
-disableWatchdogWarning = true
 showWarningOnDirectExecution = false
 
 [server]
@@ -12,13 +11,6 @@ address = "0.0.0.0"
 
 [browser]
 gatherUsageStats = false
-serverAddress = "0.0.0.0"
-serverPort = 8501
-
-# Prevent multiple browser windows from opening
-[runner]
-maxCachedMessageAge = 60
-fastReruns = true
 
 [theme]
 primaryColor = "#6366f1"
