@@ -525,10 +525,92 @@ def read_class_names() -> list:
     with open(path, "r", encoding="utf-8") as f:
         return [line.strip() for line in f if line.strip()]
 
+def download_model_from_url(model_path: str, url: str = None) -> bool:
+    """
+    Download model from URL or create a demo model.
+    """
+    try:
+        if url:
+            st.info(f"💾 Downloading model from URL...")
+            import requests
+            response = requests.get(url, stream=True)
+            response.raise_for_status()
+            
+            with open(model_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            
+            st.success("✅ Model downloaded from URL!")
+            return True
+        else:
+            # Fallback: Create demo model with meaningful weights
+            st.info("💾 Creating demo model for demonstration...")
+            
+            # Create a minimal ResNet-18 model
+            model = tv_models.resnet18(weights='IMAGENET1K_V1')  # Use pretrained weights
+            num_classes = len(read_class_names())
+            model.fc = nn.Linear(model.fc.in_features, max(num_classes, 10))
+            
+            # Save the model state dict
+            torch.save(model.state_dict(), model_path)
+            st.success("✅ Demo model created with pretrained backbone!")
+            st.info("💡 This is a demo model for testing. Upload your trained model for production use.")
+            return True
+            
+    except Exception as e:
+        st.error(f"❌ Failed to download/create model: {e}")
+        return False
+
+def is_git_lfs_pointer(file_path: str) -> bool:
+    """
+    Check if file is a Git LFS pointer (not the actual file).
+    """
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read(200)  # LFS pointers are small
+            return content.startswith('version https://git-lfs.github.com/spec/v1')
+    except (UnicodeDecodeError, Exception):
+        return False
+
+def validate_model_file(model_path: str) -> bool:
+    """
+    Validate if model file is not corrupted and has proper format.
+    """
+    if not os.path.exists(model_path):
+        return False
+        
+    # Check if it's a Git LFS pointer file
+    if is_git_lfs_pointer(model_path):
+        st.warning("🔗 Detected Git LFS pointer file (not the actual model)")
+        return False
+        
+    file_size = os.path.getsize(model_path)
+    if file_size < 1000:  # Less than 1KB is likely corrupted or empty
+        st.warning(f"📊 Model file too small: {file_size} bytes")
+        return False
+        
+    try:
+        # Try to read first few bytes to check format
+        with open(model_path, 'rb') as f:
+            header = f.read(100)
+            # Check for typical PyTorch magic bytes or pickle header
+            if not (header.startswith(b'\x80\x02') or header.startswith(b'\x80\x03') or header.startswith(b'\x80\x04')):
+                # Also check for 'PK' (zip format) which PyTorch sometimes uses
+                if not header.startswith(b'PK'):
+                    st.warning(f"🗜 Invalid file format. Header: {header[:20]}")
+                    return False
+    except Exception as e:
+        st.warning(f"⚠️ Error reading model file: {e}")
+        return False
+        
+    return True
+
 @st.cache_resource
 def load_model_and_classes() -> Tuple[torch.nn.Module, list]:
     """
     Ultra-robust model loader that prevents crashes:
+    - Validates model file integrity
+    - Downloads demo model if main model is corrupted/missing
     - Tries multiple loading strategies
     - Handles PyTorch version compatibility
     - Provides graceful fallback without crashing the app
@@ -540,10 +622,48 @@ def load_model_and_classes() -> Tuple[torch.nn.Module, list]:
     if not os.path.isabs(model_path):
         model_path = os.path.join(os.path.dirname(__file__), model_path)
 
-    if not os.path.exists(model_path):
-        st.error(f"❌ Model file not found at: {model_path}")
-        st.info("Please ensure the model.pth file is in the correct location.")
-        return None, classes
+    # Check if model file exists and is valid
+    if not validate_model_file(model_path):
+        st.warning("⚠️ Model file is missing or corrupted.")
+        
+        # Try multiple model sources
+        model_sources = []
+        
+        # 1. Environment variable
+        if os.getenv('MODEL_DOWNLOAD_URL'):
+            model_sources.append(os.getenv('MODEL_DOWNLOAD_URL'))
+            
+        # 2. Configuration file
+        try:
+            from model_config import MODEL_DOWNLOAD_URL, FALLBACK_MODEL_URLS
+            if MODEL_DOWNLOAD_URL:
+                model_sources.append(MODEL_DOWNLOAD_URL)
+            model_sources.extend(FALLBACK_MODEL_URLS)
+        except ImportError:
+            pass
+            
+        # Try each model source
+        model_loaded = False
+        for url in model_sources:
+            if url and download_model_from_url(model_path, url):
+                model_loaded = True
+                break
+        
+        # If no URL worked, create demo model
+        if not model_loaded:
+            if not download_model_from_url(model_path, None):  # Create demo model
+                st.error(f"❌ Could not load, download, or create model.")
+                st.info("The app will continue running but font prediction will not be available.")
+                
+                # Show setup instructions
+                with st.expander("💡 Model Setup Instructions", expanded=True):
+                    try:
+                        from model_config import SETUP_INSTRUCTIONS
+                        st.markdown(SETUP_INSTRUCTIONS)
+                    except ImportError:
+                        st.info("Create a model_config.py file or set MODEL_DOWNLOAD_URL environment variable.")
+                        
+                return None, classes
 
     # Show loading progress
     file_size = os.path.getsize(model_path) / (1024 * 1024)  # MB
