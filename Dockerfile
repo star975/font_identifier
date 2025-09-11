@@ -31,15 +31,6 @@ ENV OMP_NUM_THREADS=1
 ENV DISPLAY=:99
 ENV STREAMLIT_SERVER_ENABLE_STATIC_SERVING=true
 
-# Copy requirements first to leverage Docker caching
-COPY requirements.txt .
-COPY requirements-docker.txt .
-
-# Install Python dependencies in virtual environment
-RUN /opt/venv/bin/pip install --no-cache-dir --upgrade pip && \
-    /opt/venv/bin/pip install --no-cache-dir wheel setuptools && \
-    /opt/venv/bin/pip install --no-cache-dir -r requirements-docker.txt || \
-    /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
@@ -48,17 +39,29 @@ COPY . .
 RUN mkdir -p recordings config static backend/recordings torch_cache && \
     chmod 755 recordings config static backend/recordings torch_cache
 
-# Create virtual environment and switch to non-root user
-RUN python -m venv /opt/venv && \
-    useradd --create-home --shell /bin/bash --uid 1001 appuser && \
-    chown -R appuser:appuser /app /opt/venv
-
-# Switch to non-root user
-USER appuser
+# Create virtual environment first
+RUN python -m venv /opt/venv
 
 # Activate virtual environment
 ENV PATH="/opt/venv/bin:$PATH"
 ENV VIRTUAL_ENV=/opt/venv
+
+# Copy requirements first to leverage Docker caching
+COPY requirements.txt .
+COPY requirements-docker.txt .
+
+# Install Python dependencies in virtual environment
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir wheel setuptools && \
+    pip install --no-cache-dir -r requirements-docker.txt || \
+    pip install --no-cache-dir -r requirements.txt
+
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash --uid 1001 appuser && \
+    chown -R appuser:appuser /app /opt/venv
+
+# Switch to non-root user
+USER appuser
 
 # Expose port
 EXPOSE 8501
