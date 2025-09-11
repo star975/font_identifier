@@ -1,17 +1,17 @@
-# Production requirements for Font Identifier
-# Optimized for Docker deployment with full features
+# Cloud-optimized requirements for Font Identifier
+# Lighter dependencies for Streamlit Cloud deployment
 
 # Core Web Framework
 streamlit>=1.28.0,<2.0.0
 
-# PyTorch - CPU optimized for containers
+# Essential PyTorch (CPU-only for cloud)
 torch>=2.0.0,<3.0.0 --index-url https://download.pytorch.org/whl/cpu
 torchvision>=0.15.0,<1.0.0 --index-url https://download.pytorch.org/whl/cpu
 
-# Image Processing
+# Image Processing (essential only)
 Pillow>=9.0.0,<11.0.0
 
-# Data Science
+# Data Science (essential only)
 numpy>=1.21.0,<2.0.0
 
 # HTTP Requests

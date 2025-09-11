@@ -1,5 +1,5 @@
-# Multi-stage build for optimized Font Identifier app
-# ==================================================
+# Multi-stage build for optimized Font Identifier app (Production)
+# ==============================================================
 
 # Stage 1: Build dependencies
 FROM python:3.11-slim as builder
@@ -11,17 +11,17 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     g++ \
     libffi-dev \
     libssl-dev \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 # Create virtual environment
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy requirements and install Python dependencies
-COPY requirements*.txt ./
+# Copy requirements and install Python dependencies (production)
+COPY requirements.txt ./
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements-docker.txt 2>/dev/null || \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt --timeout 300
 
 # Stage 2: Runtime image
 FROM python:3.11-slim as runtime
@@ -62,8 +62,7 @@ ENV STREAMLIT_SERVER_PORT=8501 \
     STREAMLIT_SERVER_ENABLE_CORS=false \
     STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=false \
     STREAMLIT_BROWSER_GATHER_USAGE_STATS=false \
-    STREAMLIT_SERVER_ENABLE_WEBSOCKET_COMPRESSION=false \
-    STREAMLIT_GLOBAL_SHOW_WARNING_ON_DIRECT_EXECUTION=false
+    STREAMLIT_SERVER_ENABLE_WEBSOCKET_COMPRESSION=false
 
 # PyTorch optimizations
 ENV TORCH_HOME=/app/torch_cache \
@@ -95,7 +94,12 @@ COPY --chown=appuser:appuser . .
 # Create essential files if they don't exist
 RUN touch /app/model.pth /app/app_users.db && \
     mkdir -p /app/data && \
-    echo "Arial\nHelvetica\nTimes New Roman\nCalibri\nVerdana\nGeorgia\nComic Sans MS\nTrebuchet MS\nImpact\nPalatino" > /app/data/fontlist.txt
+    echo "Arial\nHelvetica\nTimes New Roman\nCalibri\nVerdana\nGeorgia\nComic Sans MS\nTrebuchet MS\nImpact\nPalatino" > /app/data/fontlist.txt && \
+    # Create startup script (always use main.py which is the full app now) \
+    echo '#!/bin/bash' > /app/start_app.sh && \
+    echo 'echo "Starting Font Identifier (production)"' >> /app/start_app.sh && \
+    echo 'exec python -m streamlit run "main.py" "$@"' >> /app/start_app.sh && \
+    chmod +x /app/start_app.sh
 
 # Expose port
 EXPOSE 8501
@@ -107,8 +111,8 @@ HEALTHCHECK --interval=30s --timeout=15s --start-period=90s --retries=3 \
         python -c "import requests; requests.get('http://localhost:8501', timeout=10)" || \
         exit 1
 
-# Optimized startup command
-CMD ["python", "-m", "streamlit", "run", "main.py", \
+# Startup command (production)
+CMD ["/app/start_app.sh", \
      "--server.address=0.0.0.0", \
      "--server.port=8501", \
      "--server.headless=true", \
