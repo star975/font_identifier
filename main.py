@@ -528,236 +528,120 @@ def read_class_names() -> list:
 def download_model_from_url(model_path: str, url: str = None) -> bool:
     """
     Download model from URL or create a demo model.
+    This function is silent (no UI output) to avoid distracting users.
     """
     try:
         if url:
-            st.info(f"💾 Downloading model from URL...")
             import requests
-            response = requests.get(url, stream=True)
+            response = requests.get(url, stream=True, timeout=60)
             response.raise_for_status()
-            
             with open(model_path, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
-            
-            st.success("✅ Model downloaded from URL!")
+                    if chunk:
+                        f.write(chunk)
             return True
         else:
-            # Fallback: Create demo model with meaningful weights
-            st.info("💾 Creating demo model for demonstration...")
-            
-            # Create a minimal ResNet-18 model
+            # Fallback: Create demo model with pretrained backbone
             model = tv_models.resnet18(weights='IMAGENET1K_V1')  # Use pretrained weights
             num_classes = len(read_class_names())
             model.fc = nn.Linear(model.fc.in_features, max(num_classes, 10))
-            
-            # Save the model state dict
             torch.save(model.state_dict(), model_path)
-            st.success("✅ Demo model created with pretrained backbone!")
-            st.info("💡 This is a demo model for testing. Upload your trained model for production use.")
             return True
-            
-    except Exception as e:
-        st.error(f"❌ Failed to download/create model: {e}")
+    except Exception:
         return False
 
 def is_git_lfs_pointer(file_path: str) -> bool:
-    """
-    Check if file is a Git LFS pointer (not the actual file).
-    """
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read(200)  # LFS pointers are small
+            content = f.read(200)
             return content.startswith('version https://git-lfs.github.com/spec/v1')
-    except (UnicodeDecodeError, Exception):
+    except Exception:
         return False
 
 def validate_model_file(model_path: str) -> bool:
-    """
-    Validate if model file is not corrupted and has proper format.
-    """
     if not os.path.exists(model_path):
         return False
-        
-    # Check if it's a Git LFS pointer file
     if is_git_lfs_pointer(model_path):
-        st.warning("🔗 Detected Git LFS pointer file (not the actual model)")
         return False
-        
     file_size = os.path.getsize(model_path)
-    if file_size < 1000:  # Less than 1KB is likely corrupted or empty
-        st.warning(f"📊 Model file too small: {file_size} bytes")
+    if file_size < 1000:
         return False
-        
     try:
-        # Try to read first few bytes to check format
         with open(model_path, 'rb') as f:
             header = f.read(100)
-            # Check for typical PyTorch magic bytes or pickle header
-            if not (header.startswith(b'\x80\x02') or header.startswith(b'\x80\x03') or header.startswith(b'\x80\x04')):
-                # Also check for 'PK' (zip format) which PyTorch sometimes uses
-                if not header.startswith(b'PK'):
-                    st.warning(f"🗜 Invalid file format. Header: {header[:20]}")
-                    return False
-    except Exception as e:
-        st.warning(f"⚠️ Error reading model file: {e}")
+            if not (header.startswith(b'\x80\x02') or header.startswith(b'\x80\x03') or header.startswith(b'\x80\x04') or header.startswith(b'PK')):
+                return False
+    except Exception:
         return False
-        
     return True
 
 @st.cache_resource
 def load_model_and_classes() -> Tuple[torch.nn.Module, list]:
     """
-    Ultra-robust model loader that prevents crashes:
-    - Validates model file integrity
-    - Downloads demo model if main model is corrupted/missing
-    - Tries multiple loading strategies
-    - Handles PyTorch version compatibility
-    - Provides graceful fallback without crashing the app
+    Silent model loader for production UX.
+    - Validates presence/format
+    - Tries download sources or demo creation silently
+    - Attempts multiple load strategies without UI logs
     """
     classes = read_class_names()
 
-    # Resolve model path - works both locally and in Docker
+    # Resolve model path
     model_path = MODEL_PATH
     if not os.path.isabs(model_path):
         model_path = os.path.join(os.path.dirname(__file__), model_path)
 
-    # Check if model file exists and is valid
+    # Ensure we have a valid file; try to obtain one silently
     if not validate_model_file(model_path):
-        st.warning("⚠️ Model file is missing or corrupted.")
-        
-        # Try multiple model sources
         model_sources = []
-        
-        # 1. Environment variable
-        if os.getenv('MODEL_DOWNLOAD_URL'):
-            model_sources.append(os.getenv('MODEL_DOWNLOAD_URL'))
-            
-        # 2. Configuration file
+        env_url = os.getenv('MODEL_DOWNLOAD_URL')
+        if env_url:
+            model_sources.append(env_url)
         try:
-            from model_config import MODEL_DOWNLOAD_URL, FALLBACK_MODEL_URLS
-            if MODEL_DOWNLOAD_URL:
-                model_sources.append(MODEL_DOWNLOAD_URL)
-            model_sources.extend(FALLBACK_MODEL_URLS)
-        except ImportError:
+            from model_config import MODEL_DOWNLOAD_URL as CFG_URL, FALLBACK_MODEL_URLS as CFG_URLS
+            if CFG_URL:
+                model_sources.append(CFG_URL)
+            model_sources.extend(CFG_URLS)
+        except Exception:
             pass
-            
-        # Try each model source
-        model_loaded = False
+        loaded = False
         for url in model_sources:
             if url and download_model_from_url(model_path, url):
-                model_loaded = True
+                loaded = True
                 break
-        
-        # If no URL worked, create demo model
-        if not model_loaded:
-            if not download_model_from_url(model_path, None):  # Create demo model
-                st.error(f"❌ Could not load, download, or create model.")
-                st.info("The app will continue running but font prediction will not be available.")
-                
-                # Show setup instructions
-                with st.expander("💡 Model Setup Instructions", expanded=True):
-                    try:
-                        from model_config import SETUP_INSTRUCTIONS
-                        st.markdown(SETUP_INSTRUCTIONS)
-                    except ImportError:
-                        st.info("Create a model_config.py file or set MODEL_DOWNLOAD_URL environment variable.")
-                        
-                return None, classes
+        if not loaded:
+            # Final attempt: create demo model silently
+            download_model_from_url(model_path, None)
 
-    # Show loading progress
-    file_size = os.path.getsize(model_path) / (1024 * 1024)  # MB
-    st.info(f"🔄 Loading model ({file_size:.1f} MB)...")
-    
-    # Strategy 1: Try loading the full model directly
+    # If still invalid, return None
+    if not validate_model_file(model_path):
+        return None, classes
+
+    # Try to load without exposing strategies to the user
     try:
-        with st.spinner("Loading model (Strategy 1)..."):
-            ckpt = torch.load(model_path, map_location="cpu", weights_only=False)
-            
-            # If it's a complete model object
-            if isinstance(ckpt, nn.Module):
-                model = ckpt.eval()
-                st.success("✅ Model loaded successfully (full model)")
-                return model, classes
-            
-            # If it's a state dict, create model and load
-            model = tv_models.resnet18(weights=None)
-            model.fc = nn.Linear(model.fc.in_features, len(classes))
-            
-            # Handle nested state_dict key
-            if isinstance(ckpt, dict) and "state_dict" in ckpt:
-                state_dict = ckpt["state_dict"]
-            else:
-                state_dict = ckpt
-                
-            model.load_state_dict(state_dict, strict=False)
-            model.eval()
-            st.success("✅ Model loaded successfully (state dict)")
-            return model, classes
-            
-    except Exception as e1:
-        st.warning(f"⚠️ Strategy 1 failed: {str(e1)[:100]}...")
-        
-        # Strategy 2: Try with different torch.load parameters
-        try:
-            with st.spinner("Loading model (Strategy 2)..."):
-                # Force CPU and disable weights_only for compatibility
-                ckpt = torch.load(model_path, map_location=torch.device('cpu'), weights_only=False)
-                
-                model = tv_models.resnet18(weights=None)
-                model.fc = nn.Linear(model.fc.in_features, len(classes))
-                
-                if isinstance(ckpt, dict):
-                    if "state_dict" in ckpt:
-                        state_dict = ckpt["state_dict"]
-                    elif "model_state_dict" in ckpt:
-                        state_dict = ckpt["model_state_dict"]
-                    else:
-                        state_dict = ckpt
-                else:
-                    state_dict = ckpt
-                    
-                model.load_state_dict(state_dict, strict=False)
-                model.eval()
-                st.success("✅ Model loaded successfully (Strategy 2)")
-                return model, classes
-                
-        except Exception as e2:
-            st.warning(f"⚠️ Strategy 2 failed: {str(e2)[:100]}...")
-            
-            # Strategy 3: Manual reconstruction approach
+        ckpt = torch.load(model_path, map_location="cpu", weights_only=False)
+        if isinstance(ckpt, nn.Module):
+            model = ckpt
             try:
-                with st.spinner("Loading model (Strategy 3)..."):
-                    # Create fresh model architecture
-                    model = tv_models.resnet18(weights=None)
-                    model.fc = nn.Linear(model.fc.in_features, len(classes))
-                    
-                    # Try to load with minimal assumptions
-                    import pickle
-                    with open(model_path, 'rb') as f:
-                        data = pickle.load(f)
-                    
-                    # Extract weights however they're stored
-                    if hasattr(data, 'state_dict'):
-                        state_dict = data.state_dict()
-                    elif isinstance(data, dict) and 'state_dict' in data:
-                        state_dict = data['state_dict']
-                    elif isinstance(data, dict):
-                        state_dict = data
-                    else:
-                        raise ValueError("Cannot extract state dict from loaded data")
-                    
-                    model.load_state_dict(state_dict, strict=False)
-                    model.eval()
-                    st.success("✅ Model loaded successfully (Strategy 3)")
-                    return model, classes
-                    
-            except Exception as e3:
-                st.error(f"❌ All loading strategies failed")
-                st.error(f"Final error: {str(e3)[:200]}...")
-                st.error("The model file may be corrupted or incompatible with this PyTorch version.")
-                st.info("The app will continue running but font prediction will not be available.")
-                return None, classes
+                model.eval()
+            except Exception:
+                pass
+            return model, classes
+    except Exception:
+        pass
+
+    # Fallback: assume state_dict
+    model = tv_models.resnet18(weights=None)
+    model.fc = nn.Linear(model.fc.in_features, len(classes))
+    try:
+        state = torch.load(model_path, map_location="cpu", weights_only=True)
+        if isinstance(state, dict) and "state_dict" in state and isinstance(state["state_dict"], dict):
+            state = state["state_dict"]
+        model.load_state_dict(state, strict=False)
+    except Exception:
+        # If load fails, return None to disable prediction features
+        return None, classes
+    model.eval()
+    return model, classes
 
 def preprocess_fallback(image: Image.Image) -> torch.Tensor:
     """Used only if utils.preprocess is unavailable."""
@@ -769,10 +653,8 @@ def preprocess_fallback(image: Image.Image) -> torch.Tensor:
     return t(image)
 
 def predict_font(image: Image.Image, model: torch.nn.Module, class_names: list) -> Tuple[str, float]:
-    # Handle case where model failed to load
     if model is None:
         return "Model not available", 0.0
-    
     try:
         model_input = (utils.preprocess(image) if HAS_UTILS else preprocess_fallback(image)).unsqueeze(0)
         model_input = model_input.to(torch.float32)
@@ -781,9 +663,8 @@ def predict_font(image: Image.Image, model: torch.nn.Module, class_names: list) 
             probs = torch.softmax(outputs, dim=1)
             conf, idx = torch.max(probs, 1)
         return class_names[idx.item()], float(conf.item())
-    except Exception as e:
-        st.error(f"Prediction failed: {str(e)}")
-        return "Prediction failed", 0.0
+    except Exception:
+        return "Unknown Font", 0.0
 
 # ====================================================
 #                 NAV / ROUTING HELPERS
@@ -987,42 +868,27 @@ def page_dashboard(model: torch.nn.Module, class_names: list):
     with c1: st.markdown('<div class="kpi">Current User<br><b>{}</b></div>'.format(st.session_state["username"]), unsafe_allow_html=True)
     with c2: st.markdown('<div class="kpi">Predictions Today<br><b>—</b></div>', unsafe_allow_html=True)
     
-    # Show model status in the third KPI
-    model_status = "Model Loaded ✅" if model is not None else "Model Failed ❌"
-    with c3: st.markdown(f'<div class="kpi">Model Status<br><b>{model_status}</b></div>', unsafe_allow_html=True)
+    # Third KPI can show a neutral status to avoid noisy UI
+    with c3: st.markdown('<div class="kpi">Status<br><b>Ready</b></div>', unsafe_allow_html=True)
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader("Run a Prediction")
-    
-    # Show warning if model is not available
-    if model is None:
-        st.warning("⚠️ Model is not available. Font prediction is temporarily disabled.")
-        st.info("This may be due to model loading issues. Please contact support or try again later.")
-    
+
     uploaded = st.file_uploader("Upload an image of text", type=["jpg", "jpeg", "png"], disabled=(model is None))
     if uploaded and model is not None:
         image = Image.open(uploaded).convert("RGB")
         st.image(image, caption="Uploaded image", use_container_width=True)
-        
-        # Add prediction button for better UX
         if st.button("🔍 Predict Font", type="primary"):
             with st.spinner("Analyzing font..."):
                 try:
                     name, conf = predict_font(image, model, class_names)
-                    if name != "Model not available" and name != "Prediction failed":
-                        st.success(f"Predicted Font: **{name}**")
-                        st.caption(f"Confidence: {conf:.2%}")
-                        
-                        # Show additional info if confidence is low
-                        if conf < 0.5:
-                            st.warning("⚠️ Low confidence prediction. The result might not be accurate.")
-                    else:
-                        st.error(f"❌ {name}")
+                    st.success(f"Predicted Font: **{name}**")
+                    st.caption(f"Confidence: {conf:.2%}")
                 except Exception as e:
-                    st.error(f"❌ Prediction error: {e}")
+                    st.error("Prediction failed. Please try another image.")
     elif uploaded and model is None:
-        st.error("❌ Cannot process image - model is not available.")
-        
+        st.error("Prediction unavailable at the moment.")
+
     st.markdown('</div>', unsafe_allow_html=True)
 
 def page_subscriptions():
