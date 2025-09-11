@@ -8,25 +8,10 @@ from typing import Optional, Tuple, Dict, Any
 from datetime import datetime, timedelta
 import streamlit as st
 from PIL import Image
-
-# Conditional imports for cloud deployment
-try:
-    import streamlit.components.v1 as components
-    HAS_COMPONENTS = True
-except ImportError:
-    HAS_COMPONENTS = False
-    components = None
-
-try:
-    from torchvision import models as tv_models
-    import torch
-    import torch.nn as nn
-    HAS_TORCH = True
-except ImportError:
-    HAS_TORCH = False
-    torch = None
-    nn = None
-    tv_models = None
+import streamlit.components.v1 as components
+from torchvision import models as tv_models
+import torch
+import torch.nn as nn
 
 st.set_page_config(
     page_title="Font Identifier & Recorder", 
@@ -586,7 +571,7 @@ def validate_model_file(model_path: str) -> bool:
     return True
 
 @st.cache_resource
-def load_model_and_classes() -> Tuple[Optional[object], list]:
+def load_model_and_classes() -> Tuple[torch.nn.Module, list]:
     """
     Silent model loader for production UX.
     - Validates presence/format
@@ -594,10 +579,6 @@ def load_model_and_classes() -> Tuple[Optional[object], list]:
     - Attempts multiple load strategies without UI logs
     """
     classes = read_class_names()
-    
-    # Check if PyTorch is available
-    if not HAS_TORCH:
-        return None, classes
 
     # Resolve model path
     model_path = MODEL_PATH
@@ -1070,11 +1051,7 @@ def page_screen_record():
     <p id="status">Not recording</p>
     """
 
-    if HAS_COMPONENTS:
-        components.html(js_code, height=250)
-    else:
-        st.warning("Screen recording feature requires additional components. Please use the full deployment.")
-        st.info("This feature is available in cPanel deployment mode.")
+    components.html(js_code, height=250)
 
 
     # TODO: Listen for JS messages (we’ll wire this part next)
