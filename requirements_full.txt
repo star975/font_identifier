@@ -1,0 +1,34 @@
+# Core Web Framework
+streamlit>=1.28.0,<2.0.0
+
+# PyTorch - Compatible versions (let pip resolve)
+torch>=2.0.0,<3.0.0
+torchvision>=0.15.0,<1.0.0
+
+# Image Processing
+Pillow>=9.0.0,<11.0.0
+opencv-python-headless>=4.5.0,<5.0.0
+
+# Data Science
+numpy>=1.21.0,<2.0.0
+pandas>=1.3.0,<3.0.0
+scikit-learn>=1.0.0,<2.0.0
+matplotlib>=3.5.0,<4.0.0
+
+# Media Processing
+moviepy>=1.0.0,<2.0.0
+imageio[ffmpeg]>=2.9.0,<3.0.0
+
+# System Interaction
+pyautogui>=0.9.50,<1.0.0
+
+# HTTP Requests
+requests>=2.25.0,<3.0.0
+
+# Payment Integrations (Optional)
+paypalrestsdk>=1.13.0,<2.0.0
+stripe>=5.0.0,<11.0.0
+
+# Database (for production deployments)
+psycopg2-binary>=2.8.0,<3.0.0; platform_system != "Windows"
+psycopg2>=2.8.0,<3.0.0; platform_system == "Windows"
